@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openarm-mp-labs"
+version = "0.1.0"
+description = "OpenArm manipulation labs: MuJoCo pick-and-place trajectory generation and replay"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Enactic, Inc." }]
+dependencies = [
+    "openarm-control",
+    "openarm-mujoco",
+    "mujoco>=3.6.0",
+    "numpy",
+]
+
+[project.scripts]
+openarm-mp-demo = "openarm_mp_labs.demo_pick_place:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv.sources]
+openarm-control = { path = "../openarm_control", editable = true }
+openarm-mujoco = { path = "../openarm_mujoco", editable = true }

@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.DS_Store
+
+# Generated previews (keep demo mp4 tracked or regenerate locally)
+**/output/*.png
+**/output/*_tip.mp4
+**/output/chk_*.png
+**/output/seq_*.png
