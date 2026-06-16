@@ -6,8 +6,8 @@ __pycache__/
 *.egg-info/
 .DS_Store
 
-# Generated previews (keep demo mp4 tracked or regenerate locally)
-**/output/*.png
-**/output/*_tip.mp4
-**/output/chk_*.png
-**/output/seq_*.png
+# Generated artifacts: never commit anything under output/ (keep dir via .gitkeep)
+output/*
+!output/.gitkeep
+**/output/*
+!**/output/.gitkeep
