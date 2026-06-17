@@ -23,6 +23,12 @@ FROM rocm/pytorch:latest
 ARG ROCM_JAX_REPO=https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2/
 ARG JAX_VERSION=0.9.2
 
+# System libs: ffmpeg (video encode) + OSMesa (headless software GL for MuJoCo
+# offscreen rendering; mesa EGL fails to init on the W7900 inside the container).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg libosmesa6 libgl1 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Planner venv: JAX-ROCm (PyRoki) + MuJoCo physics + mink IK. Isolated from the
 # system torch install so neither side's ROCm runtime / numpy clobbers the other.
 RUN python -m venv /opt/venv-planner \
@@ -32,10 +38,11 @@ RUN python -m venv /opt/venv-planner \
         "jax-rocm7-pjrt==${JAX_VERSION}" "jax-rocm7-plugin==${JAX_VERSION}" \
         -f "${ROCM_JAX_REPO}" \
     && /opt/venv-planner/bin/pip install --no-cache-dir \
-        "mujoco>=3.6.0" "mink>=1.1.0" "daqp==0.7.2" "numpy"
+        "mujoco>=3.6.0" "mink>=1.1.0" "daqp==0.7.2" "numpy" "pyyaml"
 
-# Headless rendering for MuJoCo offscreen video recording.
-ENV MUJOCO_GL=egl
+# Headless rendering for MuJoCo offscreen video recording (software OSMesa).
+ENV MUJOCO_GL=osmesa
+ENV PYOPENGL_PLATFORM=osmesa
 ENV VENV_PLANNER=/opt/venv-planner/bin/python
 
 WORKDIR /workspace

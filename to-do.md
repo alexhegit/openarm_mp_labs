@@ -70,7 +70,17 @@ docker run --rm --device=/dev/kfd --device=/dev/dri --group-add video --group-ad
 ## 阶段 4｜现有 CPU 管线进容器（低风险）
 
 - [x] 4.1 装栈：`mujoco 3.9 / mink 1.1 / daqp 0.7.2 / numpy` 已装入 venv-planner ✓
-- [ ] 4.2 跑通现有 demo（需把本地 `openarm_control/openarm_mujoco/openarm_mp_labs` 挂载进容器）：`MUJOCO_GL=egl ... demo_pick_place --record` → **通过：生成 mp4、抓取正常**
+- [x] 4.2 **容器内跑通现有 demo** ✓：挂载工作区，`--no-deps -e` 装本地三包，`MUJOCO_GL=osmesa` 录像成功
+      —— `Recorded 2150 frames (71.7s)`，`Peak cube lift 112.2 mm`，画面与宿主机一致。
+      注意：mesa **EGL 在 W7900 容器内初始化失败**，改用 **osmesa 软件渲染**（已写入镜像）；容器需 `ffmpeg`+`libosmesa6`（已装）。
+      运行：
+      ```bash
+      docker run --rm --device=/dev/kfd --device=/dev/dri --group-add video --group-add 110 \
+        --security-opt seccomp=unconfined -v /DATA/AMD-Sim/OpenArm_Labs:/workspace \
+        -w /workspace/openarm_mp_labs openarm-rocm:unified bash -lc '
+        /opt/venv-planner/bin/pip install -q --no-deps -e ../openarm_control -e ../openarm_mujoco -e .
+        /opt/venv-planner/bin/python -m openarm_mp_labs.demo_pick_place --record output/pick_place_container.mp4'
+      ```
 
 ## 阶段 5｜GraspGenX 可行性（py3.12 主要风险）
 
