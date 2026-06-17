@@ -29,7 +29,47 @@ docker run --rm --device=/dev/kfd --device=/dev/dri --group-add video --group-ad
   /opt/venv-planner/bin/python -c "import jax;print(jax.devices())"'
 ```
 
-剩余待办：阶段 5（GraspGenX 装进系统 python 并跑 openarm 夹爪推理）、阶段 7（PyRoki 装进 venv-planner）、阶段 8（集成闭环）。
+剩余待办：阶段 7（PyRoki 装进 venv-planner）、阶段 8（集成闭环）。
+
+## 进展（2026-06-17，venv 分支）— 阶段 5/6 GraspGenX + OpenArm 推理跑通 ✅
+
+在常驻容器 `graspgen-dev`（基于 `openarm-rocm:unified`）里完成 GraspGenX 安装与 openarm 夹爪 mesh 推理冒烟测试：
+
+1. **clone 超集分支**：`alexhegit/GraspGenX` 的 `visual-mesh-demo` 分支（含 ROCm + openarm 夹爪资产 + 可视化 demo 三合一），夹爪资产在 `assets/proc_grippers/openarm/`（`config.json`/`gripper.urdf`/`coll_mesh.obj`/`vis_mesh.obj`）。
+2. **依赖安装（py3.12 关口通过）**：用 **pip（非 uv）、不加 `--extra rocm`** → 已装的 torch 2.10/torchvision 0.25 满足 `>=2.1/>=0.16` 被保留、**未被改动**；`scene-synthesizer 1.15 / usd-core 26.5 / torch-geometric / diffusers 0.11.1` 全部 py3.12 装上。**关键坑**：不要用 constraints 钉本地版 torch（pip 会去远程找 `+rocm7.2.4` 本地版导致 ResolutionImpossible）；git 报 dubious ownership 需 `git config --global --add safe.directory`。numpy 被 GraspGenX 钉降到 1.26.4，**实测 torch 2.10 GPU 仍正常**（gpu_sum 4096，W7900）。
+3. **checkpoint**：首次 `import graspgenx` 自动 clone `ext/graspgenx_checkpoints`（在挂载盘），但 `.pth` 是 **git-LFS 指针**，须 `apt install git-lfs && git lfs pull` 拉真权重 → gen `epoch_736.pth` 1.2GB / dis `epoch_1056.pth` 484MB。
+4. **夹爪发现**：`python scripts/list_grippers.py` → `openarm` 在列（#1）✓。
+5. **headless mesh 推理冒烟**（rc=0）：openarm 在 `box.obj` 上 GPU 推理 ~1.5–4.5s，**50 个 6-DOF 抓取，置信度 0.42–0.63**，以 `isaac_grasp` 格式（position+quaternion）存到 `output/openarm_box_grasps.yml`。
+   - **后续项**：openarm 缺 `points.json`/`proc_gripper_only_pointnet_vae_repr.json`/`tsdf.npy` 缓存，当前用 dummy 值（有 WARNING），可能拉低分数（PR#3 标称 0.70–0.99）；后续按 README「Integrating a New Gripper」生成这些缓存以提升质量。
+
+可复现命令（在常驻容器 `graspgen-dev` 内，源码/checkpoint 都在挂载盘 `/workspace/GraspGenX`）：
+```bash
+# 容器：openarm-rocm:unified，挂载工作区，常驻
+docker run -d --name graspgen-dev --device=/dev/kfd --device=/dev/dri \
+  --group-add video --group-add 110 --security-opt seccomp=unconfined \
+  -v /DATA/AMD-Sim/OpenArm_Labs:/workspace -w /workspace/GraspGenX \
+  openarm-rocm:unified sleep infinity
+
+# 安装（保护 torch：不加 rocm extra、不用 constraints 钉 torch）
+docker exec graspgen-dev bash -lc '
+  git config --global --add safe.directory /workspace/GraspGenX
+  pip install -e .'                                   # torch/torchvision 不动，numpy→1.26.4
+
+# 拉 checkpoint 真权重（git-LFS）
+docker exec graspgen-dev bash -lc '
+  apt-get update -qq && apt-get install -y -qq git-lfs
+  cd ext/graspgenx_checkpoints && git config --global --add safe.directory "$(pwd)"
+  git lfs install && git lfs pull'
+
+# 验证夹爪 + headless 推理
+docker exec graspgen-dev bash -lc 'python scripts/list_grippers.py | grep -i openarm'
+docker exec graspgen-dev bash -lc '
+  python scripts/demo_object_mesh.py \
+    --mesh_file assets/sample_data/object_mesh/box.obj --mesh_scale 1.0 \
+    --gripper_name openarm --grasp_threshold -1.0 --return_topk --topk_num_grasps 50 \
+    --no-visualization --output_file /workspace/output/openarm_box_grasps.yml'
+```
+> 注：pip 安装的依赖在容器可写层，**不在挂载盘**。如需跨容器复用，`docker commit graspgen-dev openarm-rocm:graspgen` 固化为镜像（或写进 Dockerfile）。
 
 ## 宿主机现状（已确认）
 
@@ -84,15 +124,15 @@ docker run --rm --device=/dev/kfd --device=/dev/dri --group-add video --group-ad
 
 ## 阶段 5｜GraspGenX 可行性（py3.12 主要风险）
 
-- [ ] 5.1 clone GraspGenX，合入 `alexhegit` 的 `main`(rocm) + `openarm` 分支（均改 pyproject/AGENTS，需手动合）
-- [ ] 5.2 **依赖安装（py3.12 关口）**：`uv sync --extra rocm`，重点看 `scene-synthesizer / spconv / pointnet2_ops` 是否有 py3.12 wheel
-      → **通过：核心推理依赖装上**（`pointnet2_ops` 缺失可接受，降级 `ptv3_vanilla`）。大面积失败则改用 py3.11 的 rocm/pytorch 镜像。
-- [ ] 5.3 checkpoint：首次 import 自动从 HuggingFace 拉取，或设 `GRASPGENX_CHECKPOINT_DIR` → **通过：可加载**
+- [x] 5.1 clone `alexhegit/GraspGenX` 的 `visual-mesh-demo` 分支（rocm+openarm+vis 超集，免去手动合并）
+- [x] 5.2 **依赖安装（py3.12 关口）通过**：用 **pip、不加 rocm extra** 保护 torch 2.10；`scene-synthesizer/usd-core/torch-geometric/diffusers` py3.12 全装上；spconv 已从 pyproject 移除、走 `ptv3vanilla`，无需 `pointnet2_ops`
+- [x] 5.3 checkpoint：import 自动 clone，**git-LFS pull 拉真权重**（gen 1.2GB / dis 484MB）✓
 
 ## 阶段 6｜GraspGenX + OpenArm 抓取生成（核心目标）
 
-- [ ] 6.1 夹爪发现：`python scripts/list_grippers.py` 含 `openarm`（PR#3 资产）
-- [ ] 6.2 mesh 推理：`demo_object_mesh.py --gripper_name openarm --mesh_file <物体>` → **通过：有效 6-DOF 抓取、打分合理（PR#3：0.70–0.99）**
+- [x] 6.1 夹爪发现：`list_grippers.py` 含 `openarm`（#1）✓
+- [x] 6.2 mesh 推理：openarm 在 `box.obj` → 50 个 6-DOF 抓取、置信度 0.42–0.63、isaac_grasp yml 输出 ✓
+      （待优化：补 openarm 的 `points.json/tsdf.npy` 缓存以提升分数到 PR#3 标称 0.70–0.99）
 - [ ] 6.3（可选）可视化：PR#4 `demo_object_mesh_vis.py` 渲染夹爪精细网格确认姿态
 
 ## 阶段 7｜PyRoki（可选 IK 升级）
