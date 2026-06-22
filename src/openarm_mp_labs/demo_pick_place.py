@@ -39,6 +39,20 @@ def main() -> int:
     parser.add_argument("--record", type=Path, nargs="?", const=_default_output_path())
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--render-every", type=int, default=8)
+    parser.add_argument(
+        "--grasp-file",
+        type=str,
+        default=None,
+        help="GraspGenX isaac_grasp YAML; drives the grasp pose instead of the "
+        "hardcoded top-down cube pose.",
+    )
+    parser.add_argument(
+        "--grasp-mode",
+        choices=("topdown", "best", "full"),
+        default="topdown",
+        help="topdown: force vertical approach (validated regime); "
+        "best/full: use GraspGenX's selected 6-DOF orientation.",
+    )
     args = parser.parse_args()
 
     setup = ArmSetup.from_args(
@@ -55,7 +69,9 @@ def main() -> int:
         IKParams(damping=0.25, posture_cost=0.01, max_iters=50, dt=0.05),
     )
 
-    targets = prepare_targets(setup)
+    targets = prepare_targets(
+        setup, grasp_file=args.grasp_file, grasp_mode=args.grasp_mode, kin=kin
+    )
     print("Generating pick-and-place trajectory...")
     try:
         frames = generate_trajectory(setup, kin, targets)

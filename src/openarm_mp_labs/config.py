@@ -58,8 +58,31 @@ EE_BODY_NAME = "openarm_right_ee_base_link"
 class PickPlaceTargets:
     cube_center: np.ndarray
     place_center: np.ndarray
+    # Optional 6-DOF grasp (e.g. from GraspGenX). When ``grasp_quat`` is None the
+    # trajectory falls back to the calibrated top-down vertical grasp.
+    grasp_quat: np.ndarray | None = None
+    # Unit world direction the gripper travels INTO the object (descend dir).
+    # Defaults to straight down; pre-grasp backs off along ``-approach_world``.
+    approach_world: np.ndarray | None = None
 
     @classmethod
     def from_cube(cls, cube_center: np.ndarray) -> PickPlaceTargets:
         place = np.array([PLACE_XY[0], PLACE_XY[1], cube_center[2]], dtype=np.float64)
         return cls(cube_center=cube_center.copy(), place_center=place)
+
+    @classmethod
+    def from_grasp(
+        cls,
+        fingertip_world: np.ndarray,
+        grasp_quat: np.ndarray,
+        approach_world: np.ndarray,
+    ) -> PickPlaceTargets:
+        place = np.array(
+            [PLACE_XY[0], PLACE_XY[1], fingertip_world[2]], dtype=np.float64
+        )
+        return cls(
+            cube_center=np.asarray(fingertip_world, dtype=np.float64).copy(),
+            place_center=place,
+            grasp_quat=np.asarray(grasp_quat, dtype=np.float64).copy(),
+            approach_world=np.asarray(approach_world, dtype=np.float64).copy(),
+        )

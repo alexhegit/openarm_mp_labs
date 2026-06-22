@@ -140,10 +140,34 @@ docker exec graspgen-dev bash -lc '
 - [ ] 7.1 安装：`pip install -e pyroki`（JAX 已在镜像）
 - [ ] 7.2 用 `openarm_description/output.urdf` 求 IK → **通过：收敛、与 mink 结果对比合理**
 
-## 阶段 8｜集成闭环
+## 阶段 8｜集成闭环 ✅（2026-06-22 跑通）
 
-- [ ] 8.1 对接：GraspGenX 输出位姿 → `openarm_mp_labs` 轨迹层（替换写死的 `prepare_targets` / `TCP_OFFSET_LOCAL` / `GRASP_GRIP`）
-- [ ] 8.2 端到端：非立方体物体 → 抓取生成 → IK/轨迹 → MuJoCo 回放+双机位录制，全程 ROCm/CPU、不碰 CUDA
+- [x] 8.1 对接：新增 `grasp_io.py` 适配层——读 GraspGenX `isaac_grasp` yml → 选 grasp → 物体帧转 MuJoCo 世界/EE 帧。`prepare_targets` 支持 `--grasp-file/--grasp-mode`，`PickPlaceTargets.from_grasp` + `build_poses` 泛化为「任意接近轴 + 抓取朝向」，无 grasp 时回退原俯抓。
+- [x] 8.2 端到端：GraspGenX 位姿 → mink IK → 轨迹 → MuJoCo 双机位录像，全程 ROCm/CPU。
+
+实测（40mm 方块 mesh 推理 → 闭环）：
+- `--grasp-mode topdown`（复用已验证竖直姿态，GraspGenX 仅选 grasp）：**抬升 112.2mm**，与写死路径一致。
+- `--grasp-mode full`（用 GraspGenX 真实 6-DOF 朝向）：选中 conf=0.817 的**水平侧抓**（approach=[+1,0,0]），IK 误差 0.6mm，**抬升 115.7mm**，录像 `output/pick_place_graspgenx_full.mp4`（2150 帧）。证明轨迹层已能消费 GraspGenX 任意朝向抓取。
+
+**关键设计/坑**：grasp 的 `position`=夹爪基座，`+z`=接近方向（指尖在 +z 0.068）；与 MuJoCo「site −z 为指尖」相反。每个 grasp 的接近线都过物体质心，故指尖目标取 sim 实测 cube 中心、接近轴/朝向取自 GraspGenX。`topdown` 模式必须**直接用 home 朝向**（已校准），早期「强制 approach=[0,0,-1] 再重对齐」会引入倾斜导致抓空（lift=0）。
+
+运行：
+```bash
+# 1) 生成 cube mesh 抓取（系统 python / torch）
+docker exec graspgen-dev bash -lc 'cd /workspace/GraspGenX && python - <<PY
+import trimesh; trimesh.creation.box(extents=[0.04]*3).export("/workspace/output/cube_40mm.obj")
+PY
+python scripts/demo_object_mesh.py --mesh_file /workspace/output/cube_40mm.obj \
+  --gripper_name openarm --grasp_threshold -1.0 --return_topk --topk_num_grasps 50 \
+  --no-visualization --output_file /workspace/output/openarm_cube40_grasps.yml'
+# 2) 闭环回放（venv-planner / mujoco+mink）
+docker exec graspgen-dev bash -lc 'cd /workspace/openarm_mp_labs && \
+  MUJOCO_GL=osmesa /opt/venv-planner/bin/python -m openarm_mp_labs.demo_pick_place \
+  --grasp-file /workspace/output/openarm_cube40_grasps.yml --grasp-mode full \
+  --record /workspace/output/pick_place_graspgenx_full.mp4'
+```
+
+后续：非立方体物体（用其 mesh 推理 + 在 sim 里换成对应物体/位姿）；side-grasp 的抓取附着用接触力替代运动学 seat；阶段 6.2 夹爪缓存提分。
 
 ---
 

@@ -26,6 +26,7 @@ from openarm_mp_labs.config import (
     PickPlaceTargets,
     TCP_OFFSET_LOCAL,
 )
+from openarm_mp_labs.kinematics_utils import read_bimanual_driver
 from openarm_mp_labs.trajectory import TrajectoryFrame
 
 # Phases where position-control drift must be corrected by re-solving IK from the
@@ -64,6 +65,11 @@ def reset_sim_to_home(setup: ArmSetup, keyframe: str = "home", settle_steps: int
 def read_cube_center(model: mujoco.MjModel, data: mujoco.MjData) -> np.ndarray:
     body_id = model.body("orange_cube").id
     return data.xpos[body_id].copy()
+
+
+def read_cube_quat(model: mujoco.MjModel, data: mujoco.MjData) -> np.ndarray:
+    body_id = model.body("orange_cube").id
+    return data.xquat[body_id].copy()  # wxyz
 
 
 def tune_manipulation_physics(model: mujoco.MjModel) -> None:
@@ -434,9 +440,35 @@ def record_trajectory(
     return peak_lift
 
 
-def prepare_targets(setup: ArmSetup) -> PickPlaceTargets:
+def prepare_targets(
+    setup: ArmSetup,
+    grasp_file: str | None = None,
+    grasp_mode: str = "topdown",
+    kin: Kinematics | None = None,
+) -> PickPlaceTargets:
     reset_sim_to_home(setup)
     tune_manipulation_physics(setup.model)
     cube = read_cube_center(setup.model, setup.data)
     print(f"Settled cube center: [{cube[0]:.3f}, {cube[1]:.3f}, {cube[2]:.3f}]")
-    return PickPlaceTargets.from_cube(cube)
+    if grasp_file is None:
+        return PickPlaceTargets.from_cube(cube)
+
+    # GraspGenX-driven: map a selected object-frame grasp into the world/EE frame.
+    from openarm_mp_labs.grasp_io import load_grasps, resolve_grasp, select_grasp
+
+    cube_quat = read_cube_quat(setup.model, setup.data)
+    q16 = read_bimanual_driver(setup.joint_resolver, setup.data.qpos)
+    home_quat = (
+        kin.fk("right", q16[:8])[3:7]
+        if kin is not None
+        else np.array([1.0, 0.0, 0.0, 0.0])
+    )
+    grasps = load_grasps(grasp_file)
+    grasp = select_grasp(grasps, mode=grasp_mode)
+    wg = resolve_grasp(grasp, cube, cube_quat, home_quat, mode=grasp_mode)
+    print(
+        f"GraspGenX: {len(grasps)} grasps, selected conf={wg.confidence:.3f} "
+        f"mode={grasp_mode} approach=[{wg.approach_world[0]:+.2f},"
+        f"{wg.approach_world[1]:+.2f},{wg.approach_world[2]:+.2f}]"
+    )
+    return PickPlaceTargets.from_grasp(wg.fingertip_world, wg.site_quat, wg.approach_world)

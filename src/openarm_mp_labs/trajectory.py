@@ -44,22 +44,35 @@ def build_poses(home_pose: np.ndarray, targets: PickPlaceTargets) -> dict[str, n
 
     All waypoints (except home) are specified as fingertip-midpoint world targets
     and converted to site poses via the calibrated TCP offset.
+
+    When ``targets`` carries a 6-DOF grasp (e.g. from GraspGenX), the grasp
+    orientation drives the EE orientation and the pre-grasp backs off along the
+    grasp's approach axis; otherwise the calibrated top-down vertical grasp (home
+    orientation, back off straight up) is used.
     """
-    ori = home_pose[3:7].copy()
-    cx, cy, cz = targets.cube_center
+    ori = targets.grasp_quat if targets.grasp_quat is not None else home_pose[3:7].copy()
+    ori = np.asarray(ori, dtype=np.float32)
+    # Unit direction to back off FROM the object (opposite the approach).
+    if targets.approach_world is not None:
+        backoff = -np.asarray(targets.approach_world, dtype=np.float64)
+        backoff /= np.linalg.norm(backoff)
+    else:
+        backoff = np.array([0.0, 0.0, 1.0])  # top-down: back off straight up
+    up = np.array([0.0, 0.0, 1.0])  # lift is always vertical
+    cube = np.asarray(targets.cube_center, dtype=np.float64)
     px, py, pz = targets.place_center
 
-    def ft(x: float, y: float, z: float) -> np.ndarray:
-        return fingertip_to_site_pose(np.array([x, y, z], dtype=np.float64), ori)
+    def ft(world_xyz: np.ndarray) -> np.ndarray:
+        return fingertip_to_site_pose(np.asarray(world_xyz, dtype=np.float64), ori)
 
     return {
         "home": home_pose.copy(),
-        "pre_grasp": ft(cx, cy, cz + PRE_GRASP_DZ),
-        "grasp": ft(cx, cy, cz + GRASP_DZ),
-        "lift": ft(cx, cy, cz + LIFT_DZ),
-        "place_above": ft(px, py, pz + PLACE_ABOVE_DZ),
-        "place": ft(px, py, pz + PLACE_DZ),
-        "retreat": ft(px, py, pz + RETREAT_DZ),
+        "pre_grasp": ft(cube + backoff * PRE_GRASP_DZ),
+        "grasp": ft(cube + backoff * GRASP_DZ),
+        "lift": ft(cube + up * LIFT_DZ),
+        "place_above": ft(np.array([px, py, pz + PLACE_ABOVE_DZ])),
+        "place": ft(np.array([px, py, pz + PLACE_DZ])),
+        "retreat": ft(np.array([px, py, pz + RETREAT_DZ])),
     }
 
 
