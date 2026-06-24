@@ -23,12 +23,18 @@
 
 - **GraspGenX 端**：已安装 GraspGenX + 下载 checkpoint（推荐用已固化容器 `openarm-rocm:graspgen`）。
   首次安装见 hub 实验记录 `2026-06-17-graspgenx-openarm-inference.md`。
-  > ⚠️ **必须用 fork [`alexhegit/GraspGenX`](https://github.com/alexhegit/GraspGenX)，不是上游。**
-  > 上游 `NVlabs/GraspGenX` **尚未集成 OpenArm 夹爪，也没有 ROCm 支持**，这两项都在该 fork 中实现并已向上游提 PR（截至本文未合并）：
-  > - OpenArm pinch gripper：[NVlabs/GraspGenX#3](https://github.com/NVlabs/GraspGenX/pull/3)（分支 `openarm`，新增 `assets/proc_grippers/openarm/`）
-  > - AMD ROCm 支持：[NVlabs/GraspGenX#1](https://github.com/NVlabs/GraspGenX/pull/1)（`pyproject.toml` 加 `rocm` extra，W7900 + ROCm 7.2 验证）
+  > ⚠️ **必须用 fork [`alexhegit/GraspGenX`](https://github.com/alexhegit/GraspGenX) 的 `rocm` 分支，不是上游。**
+  > 上游 `NVlabs/GraspGenX` **尚未集成 OpenArm 夹爪，也没有 ROCm 支持**。该 fork 的 **`rocm` 分支是引用基准**，
+  > 是 `main + openarm + visual-mesh-demo` 的并集，三件事一次到位：ROCm 支持 + OpenArm 夹爪资产
+  > (`assets/proc_grippers/openarm/`) + `demo_object_mesh_vis.py` 可视化。对应已向上游提的 PR（截至本文未合并）：
+  > - OpenArm pinch gripper：[NVlabs/GraspGenX#3](https://github.com/NVlabs/GraspGenX/pull/3)
+  > - AMD ROCm 支持：[NVlabs/GraspGenX#1](https://github.com/NVlabs/GraspGenX/pull/1)
   >
-  > 安装（AMD GPU）：`uv sync --extra rocm`（如需 ZMQ 服务再加 `--extra serve`）。注意 `rocm` 与 `end2end` 互斥（end2end 的 cuRobo/Newton 是 CUDA-only，见 ADR 0002）。
+  > ```bash
+  > git clone -b rocm https://github.com/alexhegit/GraspGenX.git
+  > cd GraspGenX && uv sync --extra rocm   # 如需 ZMQ 服务再加 --extra serve
+  > ```
+  > 注意 `rocm` 与 `end2end` 互斥（end2end 的 cuRobo/Newton 是 CUDA-only，见 ADR 0002）。
 - **openarm_mp_labs 端**：planner venv（mujoco + jax + openarm_control），见本仓库 README。
 - 跑 demo 阶段**不需要** GraspGenX；只有生成新抓取时才用它。
 
@@ -66,7 +72,7 @@ docker exec graspgen-dev bash -lc '
 ```
 
 - `--gripper_name openarm`：务必用 openarm 夹爪，抓取帧才和本仓库约定一致。该夹爪由 fork
-  `alexhegit/GraspGenX` 提供（上游暂无，见 [PR #3](https://github.com/NVlabs/GraspGenX/pull/3)），
+  `alexhegit/GraspGenX` 的 `rocm` 分支提供（上游暂无，见 [PR #3](https://github.com/NVlabs/GraspGenX/pull/3)），
   对应 `assets/proc_grippers/openarm/`；上游仓库跑这条命令会因找不到该夹爪而失败。
 - `--mesh_scale 1.0`：mesh 已是米制就用 1.0。
 - 检查日志 `Inferred N grasps, scores: a — b`，确认非空、置信度合理。

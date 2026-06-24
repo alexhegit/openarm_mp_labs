@@ -35,7 +35,7 @@ docker run --rm --device=/dev/kfd --device=/dev/dri --group-add video --group-ad
 
 在常驻容器 `graspgen-dev`（基于 `openarm-rocm:unified`）里完成 GraspGenX 安装与 openarm 夹爪 mesh 推理冒烟测试：
 
-1. **clone 超集分支**：`alexhegit/GraspGenX` 的 `visual-mesh-demo` 分支（含 ROCm + openarm 夹爪资产 + 可视化 demo 三合一），夹爪资产在 `assets/proc_grippers/openarm/`（`config.json`/`gripper.urdf`/`coll_mesh.obj`/`vis_mesh.obj`）。
+1. **clone 引用基准分支**：`alexhegit/GraspGenX` 的 `rocm` 分支（= main+openarm+visual-mesh-demo 并集：ROCm + openarm 夹爪资产 + 可视化 demo），夹爪资产在 `assets/proc_grippers/openarm/`（`config.json`/`gripper.urdf`/`coll_mesh.obj`/`vis_mesh.obj`）。
 2. **依赖安装（py3.12 关口通过）**：用 **pip（非 uv）、不加 `--extra rocm`** → 已装的 torch 2.10/torchvision 0.25 满足 `>=2.1/>=0.16` 被保留、**未被改动**；`scene-synthesizer 1.15 / usd-core 26.5 / torch-geometric / diffusers 0.11.1` 全部 py3.12 装上。**关键坑**：不要用 constraints 钉本地版 torch（pip 会去远程找 `+rocm7.2.4` 本地版导致 ResolutionImpossible）；git 报 dubious ownership 需 `git config --global --add safe.directory`。numpy 被 GraspGenX 钉降到 1.26.4，**实测 torch 2.10 GPU 仍正常**（gpu_sum 4096，W7900）。
 3. **checkpoint**：首次 `import graspgenx` 自动 clone `ext/graspgenx_checkpoints`（在挂载盘），但 `.pth` 是 **git-LFS 指针**，须 `apt install git-lfs && git lfs pull` 拉真权重 → gen `epoch_736.pth` 1.2GB / dis `epoch_1056.pth` 484MB。
 4. **夹爪发现**：`python scripts/list_grippers.py` → `openarm` 在列（#1）✓。
@@ -124,7 +124,7 @@ docker exec graspgen-dev bash -lc '
 
 ## 阶段 5｜GraspGenX 可行性（py3.12 主要风险）
 
-- [x] 5.1 clone `alexhegit/GraspGenX` 的 `visual-mesh-demo` 分支（rocm+openarm+vis 超集，免去手动合并）
+- [x] 5.1 clone `alexhegit/GraspGenX` 的 `rocm` 分支（= main+openarm+visual-mesh-demo 并集，免去手动合并）
 - [x] 5.2 **依赖安装（py3.12 关口）通过**：用 **pip、不加 rocm extra** 保护 torch 2.10；`scene-synthesizer/usd-core/torch-geometric/diffusers` py3.12 全装上；spconv 已从 pyproject 移除、走 `ptv3vanilla`，无需 `pointnet2_ops`
 - [x] 5.3 checkpoint：import 自动 clone，**git-LFS pull 拉真权重**（gen 1.2GB / dis 484MB）✓
 
