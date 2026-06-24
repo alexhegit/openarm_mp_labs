@@ -25,7 +25,7 @@ import mujoco
 import numpy as np
 import yaml
 
-from openarm_mp_labs.config import TCP_OFFSET_LOCAL
+from openarm_mp_labs.config import GRASP_DEPTH_M, TCP_OFFSET_LOCAL
 
 
 @dataclass(frozen=True)
@@ -141,42 +141,44 @@ def resolve_grasp(
 ) -> WorldGrasp:
     """Map an object-frame grasp into world fingertip target + site orientation.
 
-    The fingertip target is the object center in world (the grasp's approach line
-    passes through the object centroid). The site orientation aligns the
-    site-local fingertip axis (``TCP_OFFSET_LOCAL`` direction) with the grasp's
-    world approach axis via the minimal twist from the home orientation, so a
-    near-vertical grasp reproduces the validated top-down pose.
+    The fingertip target is the grasp's world contact point
+    ``base + GRASP_DEPTH_M * approach`` (object-agnostic: works for asymmetric
+    objects where the contact is not the centroid). The site orientation aligns
+    the site-local fingertip axis (``TCP_OFFSET_LOCAL`` direction) with the
+    grasp's world approach axis via the minimal twist from the home orientation,
+    so a near-vertical grasp reproduces the validated top-down pose.
     """
     home_quat = np.asarray(home_quat, dtype=np.float64)
+    R_obj2world = _quat_to_mat(object_quat_world)
+    object_center_world = np.asarray(object_center_world, dtype=np.float64)
+
+    # Grasp pose -> world. The object mesh frame origin coincides with the
+    # manipuland body origin (the mesh is centered on its centroid).
+    base_world = object_center_world + R_obj2world @ grasp.position
+    approach_world = R_obj2world @ grasp.approach()
+    approach_world /= np.linalg.norm(approach_world)
+    contact_world = base_world + GRASP_DEPTH_M * approach_world
 
     if mode == "topdown":
-        # Reproduce the validated vertical grasp exactly: keep the home EE
-        # orientation (already calibrated for the curved-tip pinch) and descend
-        # straight down. GraspGenX here confirms graspability / selects among
-        # candidates; the pose stays in the proven physics regime.
+        # Keep the calibrated home EE orientation and descend straight down;
+        # GraspGenX still picks WHERE to grasp (contact point) and selects among
+        # candidates. Stays in the proven physics regime.
         return WorldGrasp(
-            fingertip_world=np.asarray(object_center_world, dtype=np.float64).copy(),
+            fingertip_world=contact_world,
             site_quat=home_quat.copy(),
             approach_world=np.array([0.0, 0.0, -1.0]),
             confidence=grasp.confidence,
         )
 
-    # full / best: use the grasp's actual 6-DOF orientation. Align the site-local
-    # fingertip axis (TCP_OFFSET_LOCAL direction) with the grasp's world approach
-    # via the minimal twist from home, so a near-vertical grasp stays near home.
-    R_obj2world = _quat_to_mat(object_quat_world)
-    approach_world = R_obj2world @ grasp.approach()
-    approach_world /= np.linalg.norm(approach_world)
-
+    # full / best: use the grasp's actual 6-DOF orientation.
     u_local = TCP_OFFSET_LOCAL / np.linalg.norm(TCP_OFFSET_LOCAL)
     R_home = _quat_to_mat(home_quat)
     a_home = R_home @ u_local  # world approach at home (~ straight down)
-
     R_align = _rotation_between(a_home, approach_world)
     site_quat = _mat_to_quat(R_align @ R_home)
 
     return WorldGrasp(
-        fingertip_world=np.asarray(object_center_world, dtype=np.float64).copy(),
+        fingertip_world=contact_world,
         site_quat=site_quat,
         approach_world=approach_world,
         confidence=grasp.confidence,

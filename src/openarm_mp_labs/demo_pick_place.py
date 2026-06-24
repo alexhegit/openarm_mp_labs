@@ -53,10 +53,25 @@ def main() -> int:
         help="topdown: force vertical approach (validated regime); "
         "best/full: use GraspGenX's selected 6-DOF orientation.",
     )
+    parser.add_argument(
+        "--object",
+        type=str,
+        default=None,
+        help="Scan2Sim object MJCF (e.g. Scan2Sim/mjcf/ginger/ginger.xml) to use "
+        "as the manipuland instead of the orange cube.",
+    )
     args = parser.parse_args()
 
+    if args.object is not None:
+        from openarm_mp_labs.scene_builder import build_scanned_object_scene
+
+        scene_xml = build_scanned_object_scene(args.object)
+        print(f"Built scanned-object scene: {scene_xml}")
+    else:
+        scene_xml = openarm_demo_xml()
+
     setup = ArmSetup.from_args(
-        xml=openarm_demo_xml(),
+        xml=scene_xml,
         mode="right",
         frame_right="right_ee_control_point",
         frame_type_right="site",

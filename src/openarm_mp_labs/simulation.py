@@ -37,7 +37,10 @@ CONTACT_PHASES = (
 
 # Phases during which the cube may be captured by the gripper. Capturing as the
 # fingers descend (before close) locks the cube before it can be knocked away.
-ATTACH_PHASES = ("descend_grasp", "close_gripper", "lift", "transport", "descend_place")
+# Attach only once the jaws actually start closing (not during the approach
+# descent) so the object stays put until contact, avoiding the kinematic-carry
+# "slide toward the gripper before contact" artifact.
+ATTACH_PHASES = ("close_gripper", "lift", "transport", "descend_place")
 
 
 def _in_attach_phase(label: str) -> bool:

@@ -33,6 +33,13 @@ PLACE_XY = np.array([0.47, 0.05], dtype=np.float64)
 # carried cube in the EE frame.
 TCP_OFFSET_LOCAL = np.array([0.005, 0.0, -0.150], dtype=np.float64)
 
+# Gripper grasp-center depth along the GraspGenX approach axis: distance from the
+# grasp pose origin (gripper base) to where the jaws close on the object. Measured
+# from the 40 mm cube (grasps' approach lines pass through the cube center at
+# d ~= 0.11-0.15 m). Used to map a grasp to its world contact point for arbitrary
+# (asymmetric) objects, where the contact is NOT the object centroid.
+GRASP_DEPTH_M = 0.12
+
 # Vertical offsets relative to settled cube center, applied to the FINGERTIP target.
 PRE_GRASP_DZ = 0.10
 GRASP_DZ = 0.0
