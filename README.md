@@ -90,7 +90,10 @@ Compared to the initial prototype:
 
 ## Documentation
 
-See [docs/pick_and_place_plan.md](docs/pick_and_place_plan.md).
+- [docs/new_object_pick_place.md](docs/new_object_pick_place.md) — end-to-end
+  workflow: generate a GraspGenX grasp YAML for a **new object** and run a
+  pick-and-place demo from it.
+- [docs/pick_and_place_plan.md](docs/pick_and_place_plan.md) — design notes.
 
 ## License
 
