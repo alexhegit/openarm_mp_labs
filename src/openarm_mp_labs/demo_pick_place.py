@@ -25,8 +25,23 @@ from openarm_mp_labs.simulation import (
 from openarm_mp_labs.trajectory import generate_trajectory, trajectory_summary
 
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_ASSETS_DIR = _REPO_ROOT / "assets"
+
+# Bundled non-cube manipulands shipped with the repo so the demo runs
+# standalone. name -> (object MJCF, default GraspGenX grasps YAML).
+# The ginger asset is a 3D scan from https://github.com/alexhegit/Scan2Sim,
+# converted to MuJoCo by Scan2Sim and vendored here (see assets/ginger/).
+_BUNDLED_OBJECTS = {
+    "ginger": (
+        _ASSETS_DIR / "ginger" / "ginger.xml",
+        _ASSETS_DIR / "grasps" / "ginger_grasps.yml",
+    ),
+}
+
+
 def _default_output_path() -> Path:
-    return Path(__file__).resolve().parents[2] / "output" / "pick_place_demo.mp4"
+    return _REPO_ROOT / "output" / "pick_place_demo.mp4"
 
 
 def main() -> int:
@@ -57,15 +72,24 @@ def main() -> int:
         "--object",
         type=str,
         default=None,
-        help="Scan2Sim object MJCF (e.g. Scan2Sim/mjcf/ginger/ginger.xml) to use "
-        "as the manipuland instead of the orange cube.",
+        help="Manipuland instead of the orange cube: a bundled name "
+        f"({', '.join(sorted(_BUNDLED_OBJECTS))}) or a path to any Scan2Sim "
+        "object MJCF. A bundled name also supplies its default --grasp-file.",
     )
     args = parser.parse_args()
 
-    if args.object is not None:
+    grasp_file = args.grasp_file
+    object_mjcf = args.object
+    if object_mjcf in _BUNDLED_OBJECTS:
+        bundled_xml, bundled_grasps = _BUNDLED_OBJECTS[object_mjcf]
+        object_mjcf = str(bundled_xml)
+        if grasp_file is None:
+            grasp_file = str(bundled_grasps)
+
+    if object_mjcf is not None:
         from openarm_mp_labs.scene_builder import build_scanned_object_scene
 
-        scene_xml = build_scanned_object_scene(args.object)
+        scene_xml = build_scanned_object_scene(object_mjcf)
         print(f"Built scanned-object scene: {scene_xml}")
     else:
         scene_xml = openarm_demo_xml()
@@ -85,7 +109,7 @@ def main() -> int:
     )
 
     targets = prepare_targets(
-        setup, grasp_file=args.grasp_file, grasp_mode=args.grasp_mode, kin=kin
+        setup, grasp_file=grasp_file, grasp_mode=args.grasp_mode, kin=kin
     )
     print("Generating pick-and-place trajectory...")
     try:

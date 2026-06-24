@@ -45,6 +45,39 @@ uv run openarm-mp-demo --hold-steps 80
 
 Default recording path: `output/pick_place_demo.mp4`
 
+## GraspGenX-driven grasps (beyond the cube)
+
+The grasp pose can come from a GraspGenX `isaac_grasp` YAML instead of the
+hardcoded top-down cube pose, and the manipuland can be a scanned mesh object
+instead of the cube. A scanned **ginger** is bundled so this runs standalone:
+
+```bash
+# Self-contained: bundled ginger asset + its GraspGenX grasps
+uv run openarm-mp-demo --object ginger --grasp-mode full --simulate-only
+MUJOCO_GL=egl uv run openarm-mp-demo --object ginger --grasp-mode full --record
+
+# Cube driven by a GraspGenX YAML you generated yourself
+uv run openarm-mp-demo --grasp-file path/to/grasps.yml --grasp-mode topdown --simulate-only
+```
+
+- `--object` accepts a bundled name (`ginger`) or a path to any Scan2Sim object
+  MJCF. A bundled name also supplies its default `--grasp-file`.
+- `--grasp-mode`: `topdown` (force the validated vertical approach), `best`/`full`
+  (use GraspGenX's selected 6-DOF orientation).
+
+Verified lifts: ginger topdown ~120 mm, ginger full (diagonal grasp, conf 0.97)
+~112 mm.
+
+### Bundled assets & attribution
+
+The ginger asset under `assets/ginger/` is a 3D scan from
+[Scan2Sim](https://github.com/alexhegit/Scan2Sim), converted to a MuJoCo asset by
+Scan2Sim (centered, mm→m). The vendored visual mesh is decimated to ~14k faces
+(from ~148k) to keep the repo small and osmesa rendering fast; collision is the
+convex hull. To use other Scan2Sim objects, convert them with Scan2Sim and point
+`--object` at the generated MJCF. Grasp YAMLs in `assets/grasps/` are GraspGenX
+outputs for those meshes.
+
 ## Grasp improvements (v0.1)
 
 Compared to the initial prototype:
