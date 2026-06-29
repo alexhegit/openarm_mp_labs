@@ -47,6 +47,15 @@ Default recording path: `output/pick_place_demo.mp4`
 
 ## GraspGenX-driven grasps (beyond the cube)
 
+
+flowchart LR
+  A[Object mesh] --> B["GraspGenX inference<br/>ROCm + checkpoint"]
+  B --> C["*_grasps.yml<br/>(isaac_grasp)"]
+  C --> D[grasp_io: select grasp + transform to world frame]
+  D --> E[trajectory: fingertip waypoints + site IK]
+  E --> F[simulation: settle + re-IK + attach + recording]
+
+
 The grasp pose can come from a GraspGenX `isaac_grasp` YAML instead of the
 hardcoded top-down cube pose, and the manipuland can be a scanned mesh object
 instead of the cube. A scanned **ginger** is bundled so this runs standalone:
